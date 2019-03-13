@@ -151,7 +151,7 @@ def load_data(
         LABEL,
         PATH_TO_MODEL,
         POSITIVE_FINDINGS_ONLY,
-        STARTER_IMAGES):
+        IMAGE_DF):
     """
     Loads dataloader and torchvision model
 
@@ -209,7 +209,7 @@ def load_data(
         fold='test',
         transform=data_transform,
         finding=finding,
-        starter_images=STARTER_IMAGES)
+        image_df=IMAGE_DF)
     
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=1, shuffle=False, num_workers=1)
@@ -217,7 +217,7 @@ def load_data(
     return iter(dataloader), model
 
 
-def show_next(dataloader, model, LABEL):
+def show_next(dataloader, model, LABEL, save=False):
     """
     Plots CXR, activation map of CXR, and shows model probabilities of findings
 
@@ -287,7 +287,8 @@ def show_next(dataloader, model, LABEL):
     showcxr.imshow(cxr)
     showcxr.axis('off')
     showcxr.set_title(filename[0])
-    plt.savefig(str(LABEL+"_P"+str(predx[label_index])+"_file_"+filename[0]))
+    if save:
+        plt.savefig(str(LABEL+"_P"+str(predx[label_index])+"_file_"+filename[0]))
     plt.show()
     
     
@@ -298,4 +299,4 @@ def show_next(dataloader, model, LABEL):
     preds.set_index("Finding",inplace=True)
     preds.sort_values(by='Predicted Probability',inplace=True,ascending=False)
     
-    return preds
+    return preds, filename[0]

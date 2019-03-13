@@ -10,14 +10,17 @@ from torch.autograd import Variable
 import numpy as np
 
 
-def make_pred_multilabel(data_transforms, model, PATH_TO_IMAGES):
+def make_pred_multilabel(data_input, model, PATH_TO_IMAGES, loader=False, save=False):
     """
     Gives predictions for test fold and calculates AUCs using previously trained model
 
     Args:
-        data_transforms: torchvision transforms to preprocess raw images; same as validation transforms
+        data_input: torchvision transforms to preprocess raw images; same as validation transforms, 
+                    or dataloader
         model: densenet-121 from torchvision previously fine tuned to training data
         PATH_TO_IMAGES: path at which NIH images can be found
+        loader: if True, data_input handled as datalaoder; otherwise, as tranform list
+        save: save results to csv
     Returns:
         pred_df: dataframe containing individual predictions and ground truth for each test image
         auc_df: dataframe containing aggregate AUCs by train/test tuples
@@ -29,13 +32,19 @@ def make_pred_multilabel(data_transforms, model, PATH_TO_IMAGES):
     # set model to eval mode; required for proper predictions given use of batchnorm
     model.train(False)
 
-    # create dataloader
-    dataset = CXR.CXRDataset(
-        path_to_images=PATH_TO_IMAGES,
-        fold="test",
-        transform=data_transforms['val'])
-    dataloader = torch.utils.data.DataLoader(
-        dataset, BATCH_SIZE, shuffle=False, num_workers=8)
+    # create dataloader if needed (default behavior)
+    if not loader:
+        dataset = CXR.CXRDataset(
+            path_to_images=PATH_TO_IMAGES,
+            fold="test",
+            transform=data_input['val'])
+        dataloader = torch.utils.data.DataLoader(
+            dataset, BATCH_SIZE, shuffle=False, num_workers=8)
+    else:
+        dataloader = data_input
+        dataset = dataloader.dataset
+        dataloader.batch_sampler.batch_size = BATCH_SIZE
+    
     size = len(dataset)
 
     # create empty dfs
@@ -53,25 +62,28 @@ def make_pred_multilabel(data_transforms, model, PATH_TO_IMAGES):
 
         outputs = model(inputs)
         probs = outputs.cpu().data.numpy()
-
         # get predictions and true values for each item in batch
         for j in range(0, batch_size[0]):
-            thisrow = {}
-            truerow = {}
-            thisrow["Image Index"] = dataset.df.index[BATCH_SIZE * i + j]
-            truerow["Image Index"] = dataset.df.index[BATCH_SIZE * i + j]
+            if (BATCH_SIZE * i + j) < len(dataset.df):
+                thisrow = {}
+                truerow = {}
+                thisrow["Image Index"] = dataset.df.index[BATCH_SIZE * i + j]
+                truerow["Image Index"] = dataset.df.index[BATCH_SIZE * i + j]
 
-            # iterate over each entry in prediction vector; each corresponds to
-            # individual label
-            for k in range(len(dataset.PRED_LABEL)):
-                thisrow["prob_" + dataset.PRED_LABEL[k]] = probs[j, k]
-                truerow[dataset.PRED_LABEL[k]] = true_labels[j, k]
+                # iterate over each entry in prediction vector; each corresponds to
+                # individual label
+                for k in range(len(dataset.PRED_LABEL)):
+                    thisrow["prob_" + dataset.PRED_LABEL[k]] = probs[j, k]
+                    truerow[dataset.PRED_LABEL[k]] = true_labels[j, k]
 
-            pred_df = pred_df.append(thisrow, ignore_index=True)
-            true_df = true_df.append(truerow, ignore_index=True)
+                pred_df = pred_df.append(thisrow, ignore_index=True)
+                true_df = true_df.append(truerow, ignore_index=True)
+            else:
+                print('Over dataset size, ignoring...')
+                print(BATCH_SIZE*i+j)
 
-        if(i % 10 == 0):
-            print(str(i * BATCH_SIZE))
+        if not (i % 100):
+            print('Evaluated '+str(i * BATCH_SIZE)+' of '+str(len(dataset))+' Examples...')
 
     auc_df = pd.DataFrame(columns=["label", "auc"])
 
@@ -105,7 +117,7 @@ def make_pred_multilabel(data_transforms, model, PATH_TO_IMAGES):
         except BaseException:
             print("can't calculate auc for " + str(column))
         auc_df = auc_df.append(thisrow, ignore_index=True)
-
-    pred_df.to_csv("results/preds.csv", index=False)
-    auc_df.to_csv("results/aucs.csv", index=False)
+    if save:
+        pred_df.to_csv("results/preds.csv", index=False)
+        auc_df.to_csv("results/aucs.csv", index=False)
     return pred_df, auc_df

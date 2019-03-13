@@ -14,16 +14,15 @@ class CXRDataset(Dataset):
             transform=None,
             sample=0,
             finding="any",
-            starter_images=False):
+            image_df=None):
 
         self.transform = transform
         self.path_to_images = path_to_images
         self.df = pd.read_csv("nih_labels.csv")
         self.df = self.df[self.df['fold'] == fold]
 
-        if(starter_images):
-            starter_images = pd.read_csv("starter_images.csv")
-            self.df=pd.merge(left=self.df,right=starter_images, how="inner",on="Image Index")
+        if not isinstance(image_df, type(None)):
+            self.df=pd.merge(left=self.df,right=image_df, how="inner",on="Image Index")
             
         # can limit to sample, useful for testing
         # if fold == "train" or fold =="val": sample=500
