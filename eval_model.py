@@ -27,10 +27,10 @@ def make_pred_multilabel(data_input, model, PATH_TO_IMAGES, loader=False, save=F
     """
 
     # calc preds in batches of 16, can reduce if your GPU has less RAM
-    BATCH_SIZE = 16
+   # BATCH_SIZE = 16
 
     # set model to eval mode; required for proper predictions given use of batchnorm
-    model.train(False)
+    model.eval()
 
     # create dataloader if needed (default behavior)
     if not loader:
@@ -43,7 +43,7 @@ def make_pred_multilabel(data_input, model, PATH_TO_IMAGES, loader=False, save=F
     else:
         dataloader = data_input
         dataset = dataloader.dataset
-        dataloader.batch_sampler.batch_size = BATCH_SIZE
+    #    dataloader.batch_sampler.batch_size = BATCH_SIZE
     
     size = len(dataset)
 
@@ -58,12 +58,13 @@ def make_pred_multilabel(data_input, model, PATH_TO_IMAGES, loader=False, save=F
         inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
 
         true_labels = labels.cpu().data.numpy()
-        batch_size = true_labels.shape
+        BATCH_SIZE = true_labels.shape[0]
 
         outputs = model(inputs)
         probs = outputs.cpu().data.numpy()
         # get predictions and true values for each item in batch
-        for j in range(0, batch_size[0]):
+        for j in range(0, BATCH_SIZE):
+           # import pdb; pdb.set_trace()
             if (BATCH_SIZE * i + j) < len(dataset.df):
                 thisrow = {}
                 truerow = {}
@@ -84,6 +85,7 @@ def make_pred_multilabel(data_input, model, PATH_TO_IMAGES, loader=False, save=F
 
         if not (i % 100):
             print('Evaluated '+str(i * BATCH_SIZE)+' of '+str(len(dataset))+' Examples...')
+            
 
     auc_df = pd.DataFrame(columns=["label", "auc"])
 
@@ -120,4 +122,4 @@ def make_pred_multilabel(data_input, model, PATH_TO_IMAGES, loader=False, save=F
     if save:
         pred_df.to_csv("results/preds.csv", index=False)
         auc_df.to_csv("results/aucs.csv", index=False)
-    return pred_df, auc_df
+    return pred_df, auc_df, true_df
